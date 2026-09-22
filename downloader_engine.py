@@ -172,8 +172,13 @@ class DownloaderEngine:
                 "is_playlist_candidate": is_playlist
             }
 
-    def _apply_cookie_settings(self, ydl_opts: Dict[str, Any], browser_cookies: str = "auto") -> None:
+    def _apply_cookie_settings(self, ydl_opts: Dict[str, Any], browser_cookies: str = "auto", platform_code: str = "") -> None:
         """Configura cookies para contornar proteções anti-bot do YouTube e outras plataformas."""
+        # TikTok bloqueia requisições quando cookies de navegador ou WAF tokens expirados são enviados (HTTP 403 Forbidden).
+        # O extrator nativo do yt-dlp resolve os desafios JS do TikTok perfeitamente sem cookies.
+        if platform_code == "tiktok":
+            return
+
         b_clean = (browser_cookies or "").strip().lower()
 
         # Se desativado explicitamente, não aplica nada
@@ -252,6 +257,7 @@ class DownloaderEngine:
         """Extração rápida de informações essenciais em background sem travar."""
         try:
             clean = self.clean_url(url)
+            platform_info = self.identify_platform(clean)
             ydl_opts = {
                 'quiet': True,
                 'no_warnings': True,
@@ -259,7 +265,13 @@ class DownloaderEngine:
                 'extract_flat': 'in_playlist',
                 'remote_components': {'ejs:github'},
             }
-            self._apply_cookie_settings(ydl_opts, browser_cookies)
+            if platform_info['code'] == 'tiktok':
+                ydl_opts['extractor_args'] = {
+                    'tiktok': {
+                        'app_version': ['20.2.1'],
+                    }
+                }
+            self._apply_cookie_settings(ydl_opts, browser_cookies, platform_code=platform_info['code'])
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(clean, download=False)
                 if not info:
@@ -469,8 +481,8 @@ class DownloaderEngine:
                         'filename': filename,
                     })
 
-        # Aplica autenticação / cookies para evitar bloqueios anti-bot
-        self._apply_cookie_settings(ydl_opts, browser_cookies)
+        # Aplica autenticação / cookies para evitar bloqueios anti-bot (exceto TikTok que rejeita cookies)
+        self._apply_cookie_settings(ydl_opts, browser_cookies, platform_code=platform_info['code'])
 
         ydl_opts['progress_hooks'] = [ydl_hook]
 
@@ -531,6 +543,29 @@ class DownloaderEngine:
             raise
         except Exception as e:
             err_msg = str(e)
+            # Auto-recuperação TikTok: se deu erro 403, tenta novamente garantindo que nenhum cookie seja enviado
+            if platform_info['code'] == 'tiktok' and ("403" in err_msg or "Forbidden" in err_msg):
+                self.log("[AUTO-RECUPERAÇÃO TIKTOK] Erro 403 detectado. Removendo cookies e reconectando...")
+                ydl_opts.pop('cookiefile', None)
+                ydl_opts.pop('cookiesfrombrowser', None)
+                try:
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl_retry:
+                        retcode = ydl_retry.download([clean_url])
+                        if retcode == 0:
+                            self.log("[SUCESSO] Download do TikTok concluído via auto-recuperação!")
+                            self.log(f"[ARQUIVO] Salvo na pasta: {output_dir}")
+                            if progress_callback:
+                                progress_callback({
+                                    'status': 'finished',
+                                    'percent': 100.0,
+                                    'speed': 'Concluído',
+                                    'eta': '00:00',
+                                    'filename': 'Download finalizado!',
+                                })
+                            return output_dir
+                except Exception as retry_err:
+                    err_msg = str(retry_err)
+
             # Auto-recuperação automática: se bloqueou por anti-bot e ainda não usou Chrome, tenta automaticamente
             if ("Sign in to confirm you" in err_msg or "confirm you're not a bot" in err_msg) and not ydl_opts.get('cookiesfrombrowser'):
                 self.log("[AUTO-RECUPERAÇÃO] Bloqueio anti-bot detectado. Ativando autenticação automática...")
