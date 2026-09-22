@@ -205,65 +205,66 @@ class DownloaderEngine:
                 self.log(f"[AUTH AUTO] Cookies ativos via arquivo: {os.path.basename(cookie_path)}")
                 return
 
-        # 3. Modo AUTO: detecta e ativa automaticamente o navegador do usuário
-        if b_clean in ["auto", "automático", "automatico", ""]:
-            # Prioridade 1: Google Chrome (mais comum e suporte a cookies do YouTube)
+        # 3. Autenticação via navegador (modo AUTO ou seleção explícita)
+        self._apply_browser_cookies(ydl_opts, b_clean)
+
+    def _apply_browser_cookies(self, ydl_opts: Dict[str, Any], browser_name: str = "auto") -> bool:
+        """Aplica cookies diretamente do navegador selecionado ou detectado no sistema."""
+        b_clean = (browser_name or "auto").strip().lower()
+        if b_clean in ["none", "desativado", "desabilitado"]:
+            return False
+
+        if "chrome" in b_clean or b_clean in ["auto", "automático", "automatico", ""]:
             chrome_app = "/Applications/Google Chrome.app"
             chrome_dir = os.path.expanduser("~/Library/Application Support/Google/Chrome")
-            if os.path.exists(chrome_app) or os.path.exists(chrome_dir):
+            if os.path.exists(chrome_app) or os.path.exists(chrome_dir) or "chrome" in b_clean:
                 ydl_opts['cookiesfrombrowser'] = ('chrome', 'Default', None, None)
                 self.log("[AUTH AUTO] Autenticação automática ativa via Google Chrome.")
-                return
+                return True
 
-            # Prioridade 2: Brave
-            brave_dir = os.path.expanduser("~/Library/Application Support/BraveSoftware/Brave-Browser")
-            if os.path.exists(brave_dir) or os.path.exists("/Applications/Brave Browser.app"):
-                ydl_opts['cookiesfrombrowser'] = ('brave', 'Default', None, None)
-                self.log("[AUTH AUTO] Autenticação automática ativa via Brave.")
-                return
-
-            # Prioridade 3: Safari
-            if os.path.exists("/Applications/Safari.app"):
-                ydl_opts['cookiesfrombrowser'] = ('safari', None, None, None)
-                self.log("[AUTH AUTO] Autenticação automática ativa via Safari.")
-                return
-
-            # Prioridade 4: Firefox
-            firefox_dir = os.path.expanduser("~/Library/Application Support/Firefox")
-            if os.path.exists(firefox_dir) or os.path.exists("/Applications/Firefox.app"):
-                ydl_opts['cookiesfrombrowser'] = ('firefox', None, None, None)
-                self.log("[AUTH AUTO] Autenticação automática ativa via Firefox.")
-                return
-
-        # 4. Se o usuário selecionou um navegador específico manualmente
-        if "chrome" in b_clean:
-            ydl_opts['cookiesfrombrowser'] = ('chrome', 'Default', None, None)
-            self.log("[AUTH] Autenticação ativa via Google Chrome.")
-        elif "safari" in b_clean:
-            ydl_opts['cookiesfrombrowser'] = ('safari', None, None, None)
-            self.log("[AUTH] Autenticação ativa via Safari.")
-        elif "firefox" in b_clean:
-            ydl_opts['cookiesfrombrowser'] = ('firefox', None, None, None)
-            self.log("[AUTH] Autenticação ativa via Firefox.")
-        elif "brave" in b_clean:
+        brave_dir = os.path.expanduser("~/Library/Application Support/BraveSoftware/Brave-Browser")
+        if "brave" in b_clean or os.path.exists(brave_dir) or os.path.exists("/Applications/Brave Browser.app"):
             ydl_opts['cookiesfrombrowser'] = ('brave', 'Default', None, None)
-            self.log("[AUTH] Autenticação ativa via Brave.")
-        elif "edge" in b_clean:
+            self.log("[AUTH AUTO] Autenticação automática ativa via Brave.")
+            return True
+
+        if "safari" in b_clean or os.path.exists("/Applications/Safari.app"):
+            ydl_opts['cookiesfrombrowser'] = ('safari', None, None, None)
+            self.log("[AUTH AUTO] Autenticação automática ativa via Safari.")
+            return True
+
+        firefox_dir = os.path.expanduser("~/Library/Application Support/Firefox")
+        if "firefox" in b_clean or os.path.exists(firefox_dir) or os.path.exists("/Applications/Firefox.app"):
+            ydl_opts['cookiesfrombrowser'] = ('firefox', None, None, None)
+            self.log("[AUTH AUTO] Autenticação automática ativa via Firefox.")
+            return True
+
+        if "edge" in b_clean:
             ydl_opts['cookiesfrombrowser'] = ('edge', 'Default', None, None)
             self.log("[AUTH] Autenticação ativa via Microsoft Edge.")
+            return True
 
+        return False
 
     def fetch_quick_info(self, url: str, browser_cookies: str = "auto") -> Optional[Dict[str, Any]]:
         """Extração rápida de informações essenciais em background sem travar."""
         try:
             clean = self.clean_url(url)
             platform_info = self.identify_platform(clean)
+
+            class QuickLogger:
+                def debug(self, msg): pass
+                def info(self, msg): pass
+                def warning(self, msg): pass
+                def error(self, msg): pass
+
             ydl_opts = {
                 'quiet': True,
                 'no_warnings': True,
                 'skip_download': True,
                 'extract_flat': 'in_playlist',
                 'remote_components': {'ejs:github'},
+                'logger': QuickLogger(),
             }
             if platform_info['code'] == 'tiktok':
                 ydl_opts['extractor_args'] = {
@@ -273,7 +274,18 @@ class DownloaderEngine:
                 }
             self._apply_cookie_settings(ydl_opts, browser_cookies, platform_code=platform_info['code'])
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(clean, download=False)
+                try:
+                    info = ydl.extract_info(clean, download=False)
+                except Exception as e:
+                    err_str = str(e)
+                    if platform_info['code'] == 'tiktok' and ('Log in for access' in err_str or 'not be comfortable' in err_str):
+                        self.log("[AUTO-AUTH TIKTOK] Conteúdo sensível/restrito detectado. Ativando autenticação do navegador...")
+                        ydl_opts.pop('cookiefile', None)
+                        self._apply_browser_cookies(ydl_opts, browser_cookies)
+                        with yt_dlp.YoutubeDL(ydl_opts) as ydl_retry:
+                            info = ydl_retry.extract_info(clean, download=False)
+                    else:
+                        raise
                 if not info:
                     return None
 
@@ -498,6 +510,9 @@ class DownloaderEngine:
             def warning(self, msg):
                 self.parent.log(f"[AVISO] {msg}")
             def error(self, msg):
+                # Suprime exibição prematura de erro se for um caso tratado por auto-recuperação
+                if any(k in msg for k in ["Log in for access", "not be comfortable", "confirm you're not a bot", "403: Forbidden", "HTTP Error 403"]):
+                    return
                 self.parent.log(f"[ERRO] {msg}")
 
         ydl_opts['logger'] = YdlLogger(self)
@@ -566,10 +581,33 @@ class DownloaderEngine:
                 except Exception as retry_err:
                     err_msg = str(retry_err)
 
+            # Auto-recuperação TikTok: conteúdo restrito/sensível ("Log in for access" ou "not be comfortable")
+            if platform_info['code'] == 'tiktok' and ("Log in for access" in err_msg or "not be comfortable" in err_msg):
+                self.log("[AUTO-AUTH TIKTOK] Conteúdo sensível/restrito detectado. Ativando autenticação do navegador...")
+                ydl_opts.pop('cookiefile', None)
+                self._apply_browser_cookies(ydl_opts, browser_cookies)
+                try:
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl_retry:
+                        retcode = ydl_retry.download([clean_url])
+                        if retcode == 0:
+                            self.log("[SUCESSO] Download do TikTok concluído com autenticação!")
+                            self.log(f"[ARQUIVO] Salvo na pasta: {output_dir}")
+                            if progress_callback:
+                                progress_callback({
+                                    'status': 'finished',
+                                    'percent': 100.0,
+                                    'speed': 'Concluído',
+                                    'eta': '00:00',
+                                    'filename': 'Download finalizado!',
+                                })
+                            return output_dir
+                except Exception as retry_err:
+                    err_msg = str(retry_err)
+
             # Auto-recuperação automática: se bloqueou por anti-bot e ainda não usou Chrome, tenta automaticamente
             if ("Sign in to confirm you" in err_msg or "confirm you're not a bot" in err_msg) and not ydl_opts.get('cookiesfrombrowser'):
                 self.log("[AUTO-RECUPERAÇÃO] Bloqueio anti-bot detectado. Ativando autenticação automática...")
-                ydl_opts['cookiesfrombrowser'] = ('chrome', 'Default', None, None)
+                self._apply_browser_cookies(ydl_opts, browser_cookies)
                 try:
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl_retry:
                         self.log("[MOTOR] Reconectando aos servidores com autenticação automática...")
