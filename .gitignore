@@ -77,7 +77,13 @@ Thumbs.db
 *.mkv
 *.mov
 *.avi
-*.part
-*.ytdl
 *.temp
 *.log
+
+# Sensitive authentication and cookie files (NEVER commit personal session cookies)
+cookies.txt
+*.cookies
+*.cookie
+*.cookies.txt
+challenge-solver/
+

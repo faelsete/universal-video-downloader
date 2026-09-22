@@ -59,6 +59,11 @@
 
 ## ⚡ Key Features
 
+- 🛡️ **Autonomous Anti-Bot Bypass & Cookie Engine**:
+  - Automatically overcomes YouTube's aggressive **BotGuard**, **SABR streaming**, and `n-sig` signature challenges (`Sign in to confirm you're not a bot` & `The page needs to be reloaded`).
+  - Auto-detects active browser sessions (`Google Chrome`, `Safari`, `Brave`, `Firefox`, `Microsoft Edge`) without manual setup.
+  - Integrates **EJS (Embedded JavaScript)** challenge solver via `deno`/`node` for full 4K/8K stream extraction.
+  - Automatically caches valid sessions into `cookies.txt` locally for instant, silent subsequent downloads.
 - 🎯 **Automatic Platform Detection**: Paste any URL and UVD instantly recognizes the platform (`YouTube`, `TikTok`, `Instagram`, `Facebook`, `X/Twitter`, `Reddit`, `Twitch`, `Vimeo`, `Kwai`, etc.).
 - 🚫 **No Watermark Downloads**:
   - **TikTok**: Directly downloads the clean source video stream without the floating TikTok logo.
@@ -74,7 +79,7 @@
   - Automatically embeds original high-resolution thumbnail and ID3 tags directly into MP3 and MP4 files using `mutagen`.
 - 📑 **Full Playlist & Channel Support**:
   - Automatically detects playlists and lets you download all videos ordered and numbered with one click.
-- 📋 **Smart Clipboard Watcher (Ctrl+C)**:
+- 📋 **Smart Clipboard Watcher (Ctrl+C / Cmd+C)**:
   - Copy any video link in your browser and UVD automatically captures and prepares it for download.
 - ⚡ **1-Click Auto Download**:
   - Option to trigger download immediately upon link paste.
@@ -89,7 +94,7 @@
 
 | Platform | Video Support | Audio Extraction | Special Features |
 | :--- | :---: | :---: | :--- |
-| **YouTube** | ✅ Up to 4K/8K | ✅ MP3 320k / M4A | Shorts, Playlists, Channels, Subtitles |
+| **YouTube** | ✅ Up to 4K/8K | ✅ MP3 320k / M4A | Shorts, Playlists, Channels, Subtitles, Anti-Bot Bypass |
 | **TikTok** | ✅ Full HD | ✅ Original Audio | **100% No Watermark / Sem Marca d'água** |
 | **Instagram** | ✅ Full HD | ✅ High Quality | Reels, Posts, Carousel videos |
 | **Facebook** | ✅ 1080p HD | ✅ Clear Audio | Reels, Watch, Public feed videos |
@@ -104,8 +109,13 @@
 ## 🚀 Quick Start
 
 ### Prerequisites
-- **Python 3.10+** (Tested and verified up to Python 3.13)
-- **FFmpeg** (Included in PATH for merging video and audio streams)
+- **Python 3.10+** (Verified up to Python 3.13)
+- **FFmpeg** (Required for merging video and audio streams)
+  - macOS: `brew install ffmpeg`
+  - Windows: `winget install Gyan.FFmpeg` or download from [ffmpeg.org](https://ffmpeg.org/)
+- **JavaScript Runtime** (Optional, recommended for YouTube challenge solver):
+  - macOS: `brew install deno`
+  - Windows: `winget install DenoLand.Deno`
 
 ### Installation
 
@@ -121,11 +131,15 @@
    ```
 
 3. **Run the application**:
-   - On Windows: Double-click `iniciar.bat` or run:
+   - **macOS**: Double-click `iniciar.command` in Finder or run:
+     ```bash
+     ./iniciar.command
+     ```
+   - **Windows**: Double-click `iniciar.bat` in Explorer or run:
      ```powershell
      python app.py
      ```
-   - On Linux / macOS:
+   - **Linux**:
      ```bash
      python3 app.py
      ```
@@ -135,12 +149,23 @@
 ## 📖 Usage Guide
 
 1. **Copy a link** from YouTube, TikTok, Instagram, Facebook, or any supported site.
-2. If `Auto-detectar ao copiar link (Ctrl+C)` is enabled, the link will appear in the app automatically. Otherwise, click **Colar**.
+2. If `Auto-detectar ao copiar link (Ctrl+C / Cmd+C)` is enabled, the link will appear in the app automatically. Otherwise, click **Colar**.
 3. Choose your desired output:
    - **Vídeo Completo**: Select resolution (4K, 1080p, 720p...) and format (MP4, MKV...).
    - **Apenas Áudio**: Select format (MP3, M4A, WAV...) and bitrate (320 kbps, 256 kbps...).
 4. Click **[ ⬇ INICIAR DOWNLOAD ]** and monitor real-time speed in the terminal console.
 5. When finished, click **Abrir Pasta** to immediately access your downloaded file!
+
+---
+
+## 🛡️ How the Anti-Bot System Works
+
+YouTube aggressively limits automated downloaders using **BotGuard**, **PO Tokens**, and dynamic **SABR streaming** (often resulting in errors like `Sign in to confirm you're not a bot` or `The page needs to be reloaded`). 
+
+UVD completely eliminates this friction with a 3-layer automated engine:
+1. **Auto Browser Detection**: On launch, UVD automatically checks your default installed browser (`Google Chrome`, `Safari`, `Brave`, etc.) and reads your session to authenticate with YouTube.
+2. **Remote EJS Challenge Solver**: Configured with `'remote_components': {'ejs:github'}`, allowing `yt-dlp` and `deno` to dynamically resolve YouTube's JavaScript `n-sig` challenges in real time.
+3. **Automatic Cookie Caching**: Once cookies are read, UVD saves them locally to `cookies.txt` (ignored by git). Subsequent downloads are instant, silent, and require zero keychain or browser checks.
 
 ---
 
@@ -153,14 +178,24 @@
 
 ---
 
-## 🇧🇷 Guia Rápido em Português
+## 🇧🇷 Guia Completo em Português
 
-### Como usar o Universal Video Downloader:
-1. Abra o programa com um duplo clique no arquivo `iniciar.bat`.
-2. Copie o link do vídeo que deseja baixar (YouTube, TikTok, Instagram, Facebook, etc.).
-3. O aplicativo reconhece automaticamente a plataforma e remove marcas d'água no TikTok e redes sociais.
-4. Escolha se quer **Vídeo Completo** (até 4K em MP4) ou **Apenas Áudio** (MP3 em 320 kbps com capa embutida).
-5. Clique em **INICIAR DOWNLOAD** e acompanhe o progresso no console em tempo real!
+### Como executar:
+- **No macOS**: Dê dois cliques no arquivo `iniciar.command` no Finder. Ele carrega automaticamente o ambiente do Homebrew, detecta o Python e o FFmpeg e abre o app.
+- **No Windows**: Dê dois cliques no arquivo `iniciar.bat`.
+
+### Como funciona o Contorno Anti-Bot 100% Automático:
+- O YouTube agora exige confirmação de humano para diversos vídeos em alta resolução (4K/8K), gerando bloqueios como *"Sign in to confirm you're not a bot"* ou *"The page needs to be reloaded"*.
+- O UVD detecta automaticamente o seu navegador instalado (ex: **Google Chrome** no macOS) e usa a sua sessão para autenticar de forma transparente.
+- Após o primeiro acesso, o aplicativo salva uma cópia local segura em `cookies.txt` (protegida pelo `.gitignore`), permitindo que os downloads seguintes aconteçam em **menos de 3 segundos** e sem pedir nenhuma permissão.
+- O resolvedor de desafios JavaScript (**EJS**) já vem configurado de fábrica, garantindo compatibilidade total com o novo streaming dinâmico do YouTube.
+
+### Passo a passo para baixar:
+1. Abra o aplicativo (`iniciar.command` no Mac ou `iniciar.bat` no Windows).
+2. Copie o link do vídeo desejado. Se o monitor de área de transferência estiver ativo, o link já é capturado sozinho!
+3. Escolha **Vídeo Completo** (resolução até 4K/8K) ou **Apenas Áudio** (MP3 em 320 kbps com metadados e capa original).
+4. Clique em **INICIAR DOWNLOAD** e veja o progresso no console integrado.
+5. Ao concluir, clique em **Abrir Pasta** para acessar o arquivo.
 
 ---
 
@@ -179,3 +214,4 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 <div align="center">
   <sub>Built with ❤️ for developers and creators who appreciate minimalist, powerful tools.</sub>
 </div>
+

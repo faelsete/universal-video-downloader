@@ -55,6 +55,7 @@ class UniversalDownloaderApp(ctk.CTk):
         self.configure(fg_color=COLOR_BG_DARK)
 
         # Motor e Estados
+        self.log_queue = []
         self.engine = DownloaderEngine(log_callback=self._queue_log)
         self.is_downloading = False
         self.last_clipboard_text = ""
@@ -84,6 +85,19 @@ class UniversalDownloaderApp(ctk.CTk):
         self.auto_download_var = tk.BooleanVar(value=False)
         self.auto_clipboard_var = tk.BooleanVar(value=False)
         self.download_full_playlist_var = tk.BooleanVar(value=True)
+
+        # Autenticação e Cookies Anti-Bot (100% Automático)
+        self.cookie_source_var = tk.StringVar(value="Automático (100% Auto / Navegador)")
+        self.cookie_file_path_var = tk.StringVar(value="")
+        self.cookie_source_map = {
+            "Automático (100% Auto / Navegador)": "auto",
+            "Google Chrome": "chrome",
+            "Safari": "safari",
+            "Firefox": "firefox",
+            "Brave": "brave",
+            "Microsoft Edge": "edge",
+            "Desativado": "none",
+        }
 
         # Mapeamentos Técnicos
         self.res_map = {
@@ -117,10 +131,8 @@ class UniversalDownloaderApp(ctk.CTk):
 
         # Constrói a Interface
         self._build_ui()
-
-        # Fila de Log e Clipboard Watcher
-        self.log_queue = []
         self._process_log_queue()
+        self._check_initial_cookies()
         self._start_clipboard_watcher()
 
         # Mensagem inicial no terminal
@@ -538,6 +550,61 @@ class UniversalDownloaderApp(ctk.CTk):
         )
         self.chk_subs.pack(side="left")
 
+        # Linha de Autenticação / Cookies Anti-Bot (YouTube, Instagram, etc.)
+        auth_row = ctk.CTkFrame(media_card_inner, fg_color="transparent")
+        auth_row.pack(fill="x", pady=(8, 2))
+
+        lbl_auth = ctk.CTkLabel(
+            auth_row,
+            text="AUTENTICAÇÃO (ANTI-BOT):",
+            font=(FONT_FAMILY_MONO, 11, "bold"),
+            text_color=COLOR_TEXT_MUTED,
+            anchor="w"
+        )
+        lbl_auth.pack(side="left", padx=(0, 10))
+
+        self.opt_cookie_source = ctk.CTkOptionMenu(
+            auth_row,
+            values=list(self.cookie_source_map.keys()),
+            variable=self.cookie_source_var,
+            command=self._on_cookie_source_changed,
+            font=(FONT_FAMILY_UI, 11),
+            fg_color=COLOR_INPUT_BG,
+            button_color=COLOR_BTN_SEC_BG,
+            button_hover_color=COLOR_BTN_SEC_HOVER,
+            dropdown_fg_color=COLOR_PANEL_BG,
+            dropdown_text_color=COLOR_TEXT_WHITE,
+            text_color=COLOR_TEXT_WHITE,
+            height=30,
+            width=230,
+            corner_radius=4
+        )
+        self.opt_cookie_source.pack(side="left", padx=(0, 10))
+
+        self.btn_import_cookies = ctk.CTkButton(
+            auth_row,
+            text="📁 Importar cookies.txt",
+            command=self._import_cookies_file,
+            font=(FONT_FAMILY_UI, 11),
+            fg_color=COLOR_BTN_SEC_BG,
+            border_color=COLOR_BTN_SEC_BORDER,
+            border_width=1,
+            text_color=COLOR_BTN_SEC_TEXT,
+            hover_color=COLOR_BTN_SEC_HOVER,
+            height=30,
+            width=160,
+            corner_radius=4
+        )
+        self.btn_import_cookies.pack(side="left", padx=(0, 10))
+
+        self.lbl_cookie_status = ctk.CTkLabel(
+            auth_row,
+            text="",
+            font=(FONT_FAMILY_MONO, 10),
+            text_color=COLOR_TEXT_DIM
+        )
+        self.lbl_cookie_status.pack(side="left")
+
         # --- 4. PASTA DE DESTINO ---
         dest_card = ctk.CTkFrame(
             main_frame,
@@ -731,6 +798,64 @@ class UniversalDownloaderApp(ctk.CTk):
             self.audio_panel.pack(fill="x")
             self.append_terminal_log("[MODO] Selecionado: APENAS ÁUDIO (extração MP3/M4A/WAV).")
 
+    # --- AUTENTICAÇÃO & COOKIES ANTI-BOT (100% AUTOMÁTICO) ---
+    def _check_initial_cookies(self):
+        project_dir = os.path.dirname(os.path.abspath(__file__))
+        cookie_candidates = [
+            os.path.join(project_dir, "cookies.txt"),
+            os.path.join(os.path.expanduser("~"), ".config", "yt-dlp", "cookies.txt"),
+            os.path.join(os.path.expanduser("~"), "Downloads", "cookies.txt"),
+        ]
+        for c in cookie_candidates:
+            if os.path.isfile(c) and os.path.getsize(c) > 0:
+                self.lbl_cookie_status.configure(text=f"✓ 100% Automático ({os.path.basename(c)})", text_color=COLOR_ACCENT_GREEN)
+                self.append_terminal_log(f"[AUTH AUTO] Arquivo de cookies ativo: {c}")
+                return
+
+        # Se não tem cookies.txt, detecta navegador do sistema automaticamente
+        if os.path.exists("/Applications/Google Chrome.app") or os.path.exists(os.path.expanduser("~/Library/Application Support/Google/Chrome")):
+            self.lbl_cookie_status.configure(text="✓ 100% Automático (Google Chrome ativo)", text_color=COLOR_ACCENT_GREEN)
+            self.append_terminal_log("[AUTH AUTO] Navegador detectado: Google Chrome (sessão automática ativa).")
+        elif os.path.exists("/Applications/Safari.app"):
+            self.lbl_cookie_status.configure(text="✓ 100% Automático (Safari ativo)", text_color=COLOR_ACCENT_GREEN)
+            self.append_terminal_log("[AUTH AUTO] Navegador detectado: Safari (sessão automática ativa).")
+        else:
+            self.lbl_cookie_status.configure(text="● Modo Automático", text_color=COLOR_TEXT_DIM)
+
+    def _on_cookie_source_changed(self, choice: str):
+        val = self.cookie_source_map.get(choice, "auto")
+        self.append_terminal_log(f"[AUTH] Método de autenticação selecionado: {choice}")
+        if val == "chrome":
+            self.append_terminal_log("[AUTH DICA] Se o macOS solicitar acesso ao 'Chrome Safe Storage', confirme para ler os cookies.")
+        elif val == "auto":
+            self._check_initial_cookies()
+
+    def _import_cookies_file(self):
+        file_path = filedialog.askopenfilename(
+            title="Selecione o arquivo cookies.txt",
+            filetypes=[("Arquivos de Cookies (*.txt)", "*.txt"), ("Todos os arquivos", "*.*")]
+        )
+        if file_path:
+            try:
+                import shutil
+                project_dir = os.path.dirname(os.path.abspath(__file__))
+                dest_path = os.path.join(project_dir, "cookies.txt")
+                shutil.copy2(file_path, dest_path)
+                self.cookie_file_path_var.set(dest_path)
+                self.lbl_cookie_status.configure(text="✓ cookies.txt ativo!", text_color=COLOR_ACCENT_GREEN)
+                self.append_terminal_log("[AUTH] cookies.txt importado com sucesso para a pasta do aplicativo.")
+                self.append_terminal_log("[AUTH] Bloqueios anti-bot do YouTube contornados.")
+                messagebox.showinfo("Cookies Importados", "O arquivo cookies.txt foi importado com sucesso!\nO aplicativo usará esses cookies para contornar o bloqueio do YouTube.")
+            except Exception as e:
+                self.append_terminal_log(f"[ERRO] Falha ao importar cookies: {e}")
+                messagebox.showerror("Erro ao Importar", f"Não foi possível copiar o arquivo: {e}")
+
+    def _get_selected_cookie_source(self) -> str:
+        custom_path = self.cookie_file_path_var.get().strip()
+        if custom_path and os.path.isfile(custom_path):
+            return custom_path
+        return self.cookie_source_map.get(self.cookie_source_var.get(), "auto")
+
     # --- LOGS & TERMINAL ---
     def _queue_log(self, message: str):
         now = datetime.now().strftime("%H:%M:%S")
@@ -797,7 +922,8 @@ class UniversalDownloaderApp(ctk.CTk):
             self.after(500, self._trigger_auto_download)
 
     def _fetch_metadata_worker(self, url: str):
-        meta = self.engine.fetch_quick_info(url)
+        cookie_src = self._get_selected_cookie_source()
+        meta = self.engine.fetch_quick_info(url, browser_cookies=cookie_src)
         if meta and self.url_var.get().strip() == url:
             details = meta.get('details', '')
             self.after(0, lambda: self.lbl_preview_text.configure(text=f"▶ {details}"))
@@ -888,6 +1014,7 @@ class UniversalDownloaderApp(ctk.CTk):
         embed_thumb = self.embed_thumb_var.get()
         subtitles = self.subtitles_var.get()
         download_playlist = self.download_full_playlist_var.get() if "PLAYLIST" in self.platform_badge.cget("text") else False
+        cookie_src = self._get_selected_cookie_source()
 
         self.is_downloading = True
         self.btn_download.configure(
@@ -904,7 +1031,7 @@ class UniversalDownloaderApp(ctk.CTk):
 
         t = threading.Thread(
             target=self._download_worker,
-            args=(url, output_dir, media_type, res_code, v_format, a_format, a_bitrate, embed_thumb, subtitles, download_playlist),
+            args=(url, output_dir, media_type, res_code, v_format, a_format, a_bitrate, embed_thumb, subtitles, download_playlist, cookie_src),
             daemon=True
         )
         t.start()
@@ -920,7 +1047,8 @@ class UniversalDownloaderApp(ctk.CTk):
         a_bitrate: str,
         embed_thumb: bool,
         subtitles: bool,
-        download_playlist: bool
+        download_playlist: bool,
+        browser_cookies: str
     ):
         try:
             self.engine.download(
@@ -934,6 +1062,7 @@ class UniversalDownloaderApp(ctk.CTk):
                 embed_thumbnail=embed_thumb,
                 download_subtitles=subtitles,
                 download_playlist=download_playlist,
+                browser_cookies=browser_cookies,
                 progress_callback=self._on_progress_update
             )
             self.after(0, self._on_download_success)
